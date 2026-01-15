@@ -1,0 +1,34 @@
+server:
+  port: 2021
+
+spring:
+  application:
+    name: purchase-service
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/purchase_db
+    username: root
+    password: ellenverma
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+# Feign Configuration
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 5000
+        loggerLevel: FULL
+
+inventory:
+  service:
+    url: http://localhost:2011
+
+logging:
+  level:
+    com.store.purchase.client: DEBUG
