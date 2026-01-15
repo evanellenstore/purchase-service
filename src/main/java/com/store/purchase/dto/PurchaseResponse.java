@@ -2,6 +2,10 @@ package com.store.purchase.dto;
 
 import java.time.LocalDateTime;
 
+import com.store.purchase.enums.PurchaseStatus;
+
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -21,5 +25,7 @@ public class PurchaseResponse {
     private double totalPrice;
     private String supplier;
     private String remarks;
+    @Enumerated(EnumType.STRING)
+    private PurchaseStatus status;
     private LocalDateTime purchaseDate;
 }
