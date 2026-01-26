@@ -15,8 +15,8 @@ public class PurchaseController {
     private final PurchaseService purchaseService;
 
     @PostMapping
-    public PurchaseResponse createPurchase(@RequestBody PurchaseRequest request,@RequestParam String purchaseBy) {
-        return purchaseService.createPurchase(request,purchaseBy);
+    public PurchaseResponse createPurchase(@RequestBody PurchaseRequest request) {
+        return purchaseService.createPurchase(request);
     }
 
     @PutMapping("/{id}/cancel")

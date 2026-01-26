@@ -17,5 +17,11 @@ public interface InventoryServiceClient {
 
      @PutMapping("/inventory/{productId}/release")
     void releaseStock(@PathVariable("productId") Long productId,
-                      @RequestBody ReserveRequest request);                
+                      @RequestBody ReserveRequest request); 
+                      
+   @PutMapping("/inventory/{productId}/reserve")
+    public void reserve(@PathVariable Long productId,
+                        @RequestBody ReserveRequest req);
+        
+                     
 }

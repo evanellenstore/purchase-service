@@ -14,7 +14,6 @@ import com.store.purchase.dto.PurchaseResponse;
 import com.store.purchase.dto.ReserveRequest;
 import com.store.purchase.entity.PurchaseOrder;
 import com.store.purchase.enums.PurchaseStatus;
-import com.store.purchase.enums.PurchasedBy;
 import com.store.purchase.enums.TransactionType;
 import com.store.purchase.repository.PurchaseOrderRepository;
 
@@ -25,17 +24,21 @@ import lombok.RequiredArgsConstructor;
 public class PurchaseService {
 
     private final PurchaseOrderRepository purchaseRepo;
-    private final InventoryServiceClient inventoryClient; // Call Inventory Service
+    private final InventoryServiceClient inventoryClient;
 
-    /**
-     * 
-     * @param req
-     * @return
-     */
-    // Create Purchase → Update Inventory
+    /* ==============================
+       CREATE PURCHASE → RESERVE STOCK
+       ============================== */
     @Transactional
-    public PurchaseResponse createPurchase(PurchaseRequest req, String purchasedBy) {
+    public PurchaseResponse createPurchase(PurchaseRequest req) {
 
+        // 1️⃣ Reserve stock
+        inventoryClient.reserve(
+                req.getProductId(),
+                new ReserveRequest(req.getQuantity(), "PURCHASE_CREATE")
+        );
+
+        // 2️⃣ Save purchase
         PurchaseOrder order = PurchaseOrder.builder()
                 .productId(req.getProductId())
                 .quantity(req.getQuantity())
@@ -48,48 +51,62 @@ public class PurchaseService {
                 .build();
 
         purchaseRepo.save(order);
-
-        // Update Inventory
-        AdjustRequest adjustRequest = new AdjustRequest();
-        adjustRequest.setQuantity(req.getQuantity());
-
-        if(PurchasedBy.CUSTOMER.name().equalsIgnoreCase(purchasedBy)) {
-            adjustRequest.setType(TransactionType.OUT.name());
-        } else {
-            adjustRequest.setType(TransactionType.IN.name());
-        }
-        adjustRequest.setRemarks("Purchase: " + req.getRemarks());
-        inventoryClient.adjustStock(req.getProductId(), adjustRequest);
-
         return mapToResponse(order);
     }
 
-@Transactional
-public void cancelPurchase(Long purchaseId) {
+    /* ==============================
+       COMPLETE PURCHASE → ADJUST OUT
+       ============================== */
+    @Transactional
+    public void completePurchase(Long purchaseId) {
 
-    PurchaseOrder purchase = purchaseRepo.findById(purchaseId)
-            .orElseThrow(() -> new RuntimeException("Purchase not found"));
+        PurchaseOrder purchase = purchaseRepo.findById(purchaseId)
+                .orElseThrow(() -> new RuntimeException("Purchase not found"));
 
-    if (purchase.getStatus() == PurchaseStatus.CANCELLED) {
-        throw new RuntimeException("Purchase already cancelled");
+        if (purchase.getStatus() != PurchaseStatus.CREATED) {
+            throw new RuntimeException("Only CREATED purchase can be completed");
+        }
+
+        AdjustRequest adjust = new AdjustRequest();
+        adjust.setQuantity(purchase.getQuantity());
+        adjust.setType(TransactionType.OUT.name());
+        adjust.setRemarks("PURCHASE_COMPLETE");
+
+        inventoryClient.adjustStock(purchase.getProductId(), adjust);
+
+        purchase.setStatus(PurchaseStatus.COMPLETED);
+        purchaseRepo.save(purchase);
     }
 
-    inventoryClient.releaseStock(
-        purchase.getProductId(),
-        new ReserveRequest(purchase.getQuantity(), "PURCHASE_CANCEL")
-    );
+    /* ==============================
+       CANCEL PURCHASE → RELEASE STOCK
+       ============================== */
+    @Transactional
+    public void cancelPurchase(Long purchaseId) {
 
-    purchase.setStatus(PurchaseStatus.CANCELLED);
-    purchaseRepo.save(purchase);
-}
+        PurchaseOrder purchase = purchaseRepo.findById(purchaseId)
+                .orElseThrow(() -> new RuntimeException("Purchase not found"));
 
+        if (purchase.getStatus() == PurchaseStatus.CANCELLED) {
+            throw new RuntimeException("Purchase already cancelled");
+        }
 
+        if (purchase.getStatus() == PurchaseStatus.COMPLETED) {
+            throw new RuntimeException("Completed purchase cannot be cancelled");
+        }
 
+        inventoryClient.releaseStock(
+                purchase.getProductId(),
+                new ReserveRequest(purchase.getQuantity(), "PURCHASE_CANCEL")
+        );
 
-    /**
-     * Get all purchases
-     * @return
-     */
+        purchase.setStatus(PurchaseStatus.CANCELLED);
+        purchaseRepo.save(purchase);
+    }
+
+    /* ==============================
+       READ OPERATIONS
+       ============================== */
     public List<PurchaseResponse> getAllPurchases() {
         return purchaseRepo.findAll()
                 .stream()
@@ -103,10 +120,18 @@ public void cancelPurchase(Long purchaseId) {
                 .orElseThrow(() -> new RuntimeException("Purchase not found"));
     }
 
+    /* ==============================
+       UPDATE PURCHASE
+       ============================== */
     @Transactional
     public PurchaseResponse updatePurchase(Long id, PurchaseRequest req) {
+
         PurchaseOrder order = purchaseRepo.findById(id)
                 .orElseThrow(() -> new RuntimeException("Purchase not found"));
+
+        if (order.getStatus() != PurchaseStatus.CREATED) {
+            throw new RuntimeException("Only CREATED purchase can be updated");
+        }
 
         order.setQuantity(req.getQuantity());
         order.setUnitPrice(req.getUnitPrice());
@@ -118,10 +143,14 @@ public void cancelPurchase(Long purchaseId) {
         return mapToResponse(order);
     }
 
+    /* ==============================
+       DELETE (ADMIN ONLY)
+       ============================== */
     @Transactional
     public void deletePurchase(Long id) {
         purchaseRepo.deleteById(id);
     }
+
 
     private PurchaseResponse mapToResponse(PurchaseOrder order) {
         return PurchaseResponse.builder()
@@ -133,6 +162,7 @@ public void cancelPurchase(Long purchaseId) {
                 .supplier(order.getSupplier())
                 .purchaseDate(order.getPurchaseDate())
                 .remarks(order.getRemarks())
+                .status(order.getStatus())
                 .build();
     }
 }
