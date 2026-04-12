@@ -29,6 +29,11 @@ public class PurchaseController {
         return purchaseService.getAllPurchases();
     }
 
+    @GetMapping("/report")
+    public List<?> getProductReports() {
+        return purchaseService.getProductReports();
+    }
+
     @GetMapping("/{id}")
     public PurchaseResponse getPurchase(@PathVariable Long id) {
         return purchaseService.getPurchaseById(id);

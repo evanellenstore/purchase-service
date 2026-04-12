@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.store.purchase.client.InventoryServiceClient;
 import com.store.purchase.dto.AdjustRequest;
+import com.store.purchase.dto.ProductReportDTO;
 import com.store.purchase.dto.PurchaseRequest;
 import com.store.purchase.dto.PurchaseResponse;
 import com.store.purchase.dto.ReserveRequest;
@@ -111,6 +112,28 @@ public class PurchaseService {
         return purchaseRepo.findAll()
                 .stream()
                 .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get aggregated product report data (for reporting service)
+     * Groups purchases by productId and calculates total quantity and revenue
+     */
+    public List<ProductReportDTO> getProductReports() {
+        var purchasesByProduct = purchaseRepo.findAll()
+                .stream()
+                .collect(Collectors.groupingBy(PurchaseOrder::getProductId));
+
+        return purchasesByProduct.entrySet().stream()
+                .map(entry -> ProductReportDTO.builder()
+                        .productId(entry.getKey())
+                        .totalPurchased((int) entry.getValue().stream()
+                                .mapToLong(PurchaseOrder::getQuantity)
+                                .sum())
+                        .totalRevenue(entry.getValue().stream()
+                                .mapToDouble(PurchaseOrder::getTotalPrice)
+                                .sum())
+                        .build())
                 .collect(Collectors.toList());
     }
 
